@@ -1,0 +1,63 @@
+# ─────────────────────────────────────────────
+#  逢甲大學資工系教授查詢系統 — .gitignore
+# ─────────────────────────────────────────────
+
+# ── Node.js 相依套件（任意目錄下）─────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# ── 資料庫檔案 ────────────────────────────────
+# SQLite 資料庫由爬蟲執行後自動生成，不納入版控
+*.db
+*.sqlite
+*.sqlite3
+
+# ── 環境變數與機密設定 ─────────────────────────
+.env
+.env.local
+.env.development
+.env.production
+.env.*.local
+*.pem
+*.key
+
+# ── Vite 前端建置輸出 ──────────────────────────
+dist/
+.vite/
+
+# ── 除錯與暫存腳本（非正式程式碼）───────────────
+project/server/debug_html.js
+project/server/debug_html2.js
+project/server/verify_db.js
+
+# ── 編輯器與 IDE ───────────────────────────────
+.vscode/settings.json
+.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+
+# ── 作業系統產生的檔案 ─────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ── Log 與暫存目錄 ────────────────────────────
+logs/
+*.log
+.cache/
+tmp/
+temp/
+
+# ── AI 工具暫存資料（不需版控）────────────────
+.gemini/
