@@ -15,10 +15,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ── Job 1: 部署後端到 Azure App Service ────────────────────────
+  # ── Job 1: 部署後端到 Azure App Service (OIDC 認證) ────────────
   deploy-backend:
     name: Deploy backend to Azure App Service
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,11 +35,17 @@ jobs:
         working-directory: project/server
         run: npm ci --omit=dev
 
+      - name: Login to Azure (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_64EE44736934495680DD6D72500ADFE7 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_265013DB1ECE4D46BEB24B78A5F249AB }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_BF4DDE7ECF9F4C428C06B3B10E29FA47 }}
+
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
-          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          app-name: 'professor-lookup-api'
           package: project/server
 
   # ── Job 2: Build 前端並部署到 GitHub Pages ─────────────────────
@@ -61,7 +70,6 @@ jobs:
       - name: Build client
         working-directory: project/client
         env:
-          # 指向 Azure 後端的 URL（設定在 GitHub Secrets）
           VITE_API_BASE: ${{ secrets.VITE_API_BASE }}
         run: npm run build
 
