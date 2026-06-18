@@ -1,4 +1,4 @@
-name: Deploy – GitHub Pages (frontend) + Azure App Service (backend)
+name: Deploy frontend to GitHub Pages
 
 on:
   push:
@@ -15,40 +15,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ── Job 1: 部署後端到 Azure App Service (OIDC 認證) ────────────
-  deploy-backend:
-    name: Deploy backend to Azure App Service
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Install server dependencies
-        working-directory: project/server
-        run: npm ci --omit=dev
-
-      - name: Login to Azure (OIDC)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_64EE44736934495680DD6D72500ADFE7 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_265013DB1ECE4D46BEB24B78A5F249AB }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_BF4DDE7ECF9F4C428C06B3B10E29FA47 }}
-
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: 'professor-lookup-api'
-          package: project/server
-
-  # ── Job 2: Build 前端並部署到 GitHub Pages ─────────────────────
   build-frontend:
     name: Build frontend
     runs-on: ubuntu-latest
@@ -70,6 +36,7 @@ jobs:
       - name: Build client
         working-directory: project/client
         env:
+          # 指向 Azure 後端 API 的 URL（設定在 GitHub Secrets）
           VITE_API_BASE: ${{ secrets.VITE_API_BASE }}
         run: npm run build
 
@@ -79,7 +46,7 @@ jobs:
           path: project/client/dist
 
   deploy-frontend:
-    name: Deploy frontend to GitHub Pages
+    name: Deploy to GitHub Pages
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
