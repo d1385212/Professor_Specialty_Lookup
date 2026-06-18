@@ -1,140 +1,143 @@
-/**
- * server.js
- * 逢甲資工系教授查詢系統 — Express API 伺服器
- * 啟動方式: node server.js
- */
-
 const express = require('express');
-const cors    = require('cors');
-const { initDB, queryTeachers } = require('./db');
+const cors = require('cors');
+const { initDB, insertReview, queryReviews, queryTeachers } = require('./db');
 
-const app  = express();
+const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ── Middleware ────────────────────────────────────────────
 app.use(express.json());
+app.use(
+  cors({
+    origin: ['http://localhost:5173', 'http://localhost:4173', 'http://127.0.0.1:5173'],
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type'],
+  }),
+);
 
-// CORS：允許前端開發伺服器 (Vite, port 5173) 與任意本機來源存取
-app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'http://localhost:4173',
-    'http://127.0.0.1:5173',
-  ],
-  methods: ['GET'],
-  allowedHeaders: ['Content-Type'],
-}));
-
-// ── Helper ────────────────────────────────────────────────
-/**
- * 統一成功回應格式
- */
 function sendSuccess(res, data, meta = {}) {
   res.json({ success: true, ...meta, data });
 }
 
-/**
- * 統一錯誤回應格式
- */
 function sendError(res, statusCode, message) {
   res.status(statusCode).json({ success: false, message });
 }
 
-// ── Routes ────────────────────────────────────────────────
+function asRating(value) {
+  const rating = Number(value);
+  return Number.isInteger(rating) && rating >= 1 && rating <= 5 ? rating : null;
+}
 
-/**
- * GET /
- * 健康檢查 (Health Check)
- */
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: '逢甲大學資工系教授查詢 API 伺服器運行中',
-    version: '1.0.0',
+    message: 'Professor specialty and review API is running.',
+    version: '1.1.0',
     endpoints: {
-      teachers:   'GET /api/teachers?q=<keyword>&category=<category>',
+      teachers: 'GET /api/teachers?q=<keyword>&category=<category>',
       categories: 'GET /api/categories',
+      reviews: 'GET /api/teachers/:id/reviews',
+      createReview: 'POST /api/teachers/:id/reviews',
     },
   });
 });
 
-/**
- * GET /api/teachers
- * 取得教師列表，支援關鍵字搜尋與分類篩選
- *
- * Query Parameters:
- *   q        {string}  關鍵字（姓名、專長模糊搜尋），選擇性
- *   category {string}  分類精確過濾（如: 專任教師），選擇性
- *
- * Response:
- *   { success, total, data: Teacher[] }
- */
 app.get('/api/teachers', async (req, res) => {
   try {
-    const q        = (req.query.q        || '').trim();
+    const q = (req.query.q || '').trim();
     const category = (req.query.category || '').trim();
-
     const teachers = await queryTeachers(q, category);
 
     sendSuccess(res, teachers, { total: teachers.length });
   } catch (err) {
-    console.error('[API] /api/teachers 發生錯誤:', err.message);
-    sendError(res, 500, '伺服器內部錯誤，請稍後再試');
+    console.error('[API] /api/teachers failed:', err.message);
+    sendError(res, 500, 'Unable to load teacher data.');
   }
 });
 
-/**
- * GET /api/categories
- * 取得所有可用分類列表（供前端篩選按鈕使用）
- *
- * Response:
- *   { success, data: string[] }
- */
 app.get('/api/categories', async (req, res) => {
   try {
-    // 從資料庫動態取得所有分類（去重、排序）
     const allTeachers = await queryTeachers('', '');
-    const categorySet = new Set(allTeachers.map(t => t.category));
-
-    // 依照指定顯示順序排列
-    const ORDER = ['系主任', '特聘教授', '榮譽教授', '專任教師', '兼任教師', '行政教師', '其他'];
-    const categories = ORDER.filter(c => categorySet.has(c));
-
-    // 將 Set 中其他未列入 ORDER 的分類補在最後
-    categorySet.forEach(c => {
-      if (!ORDER.includes(c)) categories.push(c);
-    });
+    const categories = [...new Set(allTeachers.map((teacher) => teacher.category).filter(Boolean))];
 
     sendSuccess(res, categories);
   } catch (err) {
-    console.error('[API] /api/categories 發生錯誤:', err.message);
-    sendError(res, 500, '伺服器內部錯誤，請稍後再試');
+    console.error('[API] /api/categories failed:', err.message);
+    sendError(res, 500, 'Unable to load categories.');
   }
 });
 
-/**
- * 404 處理
- */
-app.use((req, res) => {
-  sendError(res, 404, `找不到路由: ${req.method} ${req.path}`);
+app.get('/api/teachers/:id/reviews', async (req, res) => {
+  try {
+    const teacherId = Number(req.params.id);
+    if (!Number.isInteger(teacherId) || teacherId < 1) {
+      return sendError(res, 400, 'Invalid teacher id.');
+    }
+
+    const reviews = await queryReviews(teacherId);
+    sendSuccess(res, reviews, { total: reviews.length });
+  } catch (err) {
+    console.error('[API] GET reviews failed:', err.message);
+    sendError(res, 500, 'Unable to load reviews.');
+  }
 });
 
-// ── 啟動伺服器 ─────────────────────────────────────────────
+app.post('/api/teachers/:id/reviews', async (req, res) => {
+  try {
+    const teacherId = Number(req.params.id);
+    if (!Number.isInteger(teacherId) || teacherId < 1) {
+      return sendError(res, 400, 'Invalid teacher id.');
+    }
+
+    const kindness = asRating(req.body.kindness_rating);
+    const recommendation = asRating(req.body.recommendation_rating);
+    const workload = asRating(req.body.workload_rating);
+    const content = (req.body.content || '').trim();
+    const department = (req.body.department || '').trim().slice(0, 60);
+
+    if (!kindness || !recommendation || !workload) {
+      return sendError(res, 400, 'Ratings must be integers from 1 to 5.');
+    }
+
+    if (content.length < 4) {
+      return sendError(res, 400, 'Please write a little more detail for the review.');
+    }
+
+    if (content.length > 1500) {
+      return sendError(res, 400, 'Review content is too long.');
+    }
+
+    const reviewId = await insertReview(teacherId, {
+      department,
+      kindness_rating: kindness,
+      recommendation_rating: recommendation,
+      workload_rating: workload,
+      content,
+    });
+
+    const [createdReview] = await queryReviews(teacherId).then((reviews) =>
+      reviews.filter((review) => review.id === reviewId),
+    );
+
+    sendSuccess(res.status(201), createdReview || { id: reviewId });
+  } catch (err) {
+    console.error('[API] POST review failed:', err.message);
+    sendError(res, 500, 'Unable to save review.');
+  }
+});
+
+app.use((req, res) => {
+  sendError(res, 404, `Route not found: ${req.method} ${req.path}`);
+});
+
 (async () => {
   try {
     await initDB();
-    console.log('[Server] 資料庫初始化完成');
 
     app.listen(PORT, () => {
-      console.log(`[Server] ✅ 伺服器已啟動：http://localhost:${PORT}`);
-      console.log(`[Server] API 端點：`);
-      console.log(`         GET http://localhost:${PORT}/api/teachers`);
-      console.log(`         GET http://localhost:${PORT}/api/teachers?q=機器學習`);
-      console.log(`         GET http://localhost:${PORT}/api/teachers?category=專任教師`);
-      console.log(`         GET http://localhost:${PORT}/api/categories`);
+      console.log(`[Server] API running at http://localhost:${PORT}`);
     });
   } catch (err) {
-    console.error('[Server] 啟動失敗:', err);
+    console.error('[Server] Failed to start:', err);
     process.exit(1);
   }
 })();

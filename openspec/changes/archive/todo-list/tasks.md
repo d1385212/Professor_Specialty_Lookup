@@ -18,12 +18,12 @@
 - [x] 使用瀏覽器或工具測試 API 回傳的 JSON 格式是否正確。
 
 ## Phase 4: 前端介面開發 (Frontend UI)
-- [ ] 於 `/client/src/assets/index.css` 撰寫全域 CSS，實作現代化深色玻璃擬物風格。
-- [ ] 開發 `SearchBar.vue` 元件 (包含搜尋輸入框與分類過濾按鈕)。
-- [ ] 開發 `TeacherCard.vue` 元件 (用於呈現教授照片、姓名、專長標籤等資訊)。
+- [x] 於 `/client/src/assets/index.css` 撰寫全域 CSS，實作現代化深色玻璃擬物風格。
+- [x] 開發 `SearchBar.vue` 元件 (包含搜尋輸入框與分類過濾按鈕)。
+- [x] 開發 `TeacherCard.vue` 元件 (用於呈現教授照片、姓名、專長標籤等資訊)。
 
 ## Phase 5: 前後端整合與測試 (Integration & Polish)
-- [ ] 於 `/client/src/App.vue` 實作 Fetch API 呼叫後端取得資料。
-- [ ] 將狀態 (Loading, Error, 資料陣列) 綁定至前端元件。
-- [ ] 測試點擊分類按鈕與輸入關鍵字時，畫面是否能正確更新。
-- [ ] 最終畫面細節微調與除錯。
+- [x] 於 `/client/src/App.vue` 實作 Fetch API 呼叫後端取得資料。
+- [x] 將狀態 (Loading, Error, 資料陣列) 綁定至前端元件。
+- [x] 測試點擊分類按鈕與輸入關鍵字時，畫面是否能正確更新。
+- [x] 最終畫面細節微調與除錯。

@@ -5,124 +5,200 @@ const DB_PATH = path.join(__dirname, 'teachers.db');
 
 const db = new sqlite3.Database(DB_PATH, (err) => {
   if (err) {
-    console.error('[DB] 無法開啟資料庫:', err.message);
+    console.error('[DB] Failed to open SQLite database:', err.message);
   } else {
-    console.log('[DB] 成功連線至 SQLite 資料庫:', DB_PATH);
+    console.log('[DB] Connected to SQLite database:', DB_PATH);
   }
 });
 
-/**
- * 初始化資料庫：建立 teachers 資料表（若不存在）
- */
 function initDB() {
   return new Promise((resolve, reject) => {
-    db.run(
-      `CREATE TABLE IF NOT EXISTS teachers (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        name        TEXT    NOT NULL,
-        title       TEXT,
-        category    TEXT,
-        specialties TEXT,
-        email       TEXT,
-        image_url   TEXT,
-        profile_url TEXT
-      )`,
-      (err) => {
-        if (err) {
-          console.error('[DB] 建立資料表失敗:', err.message);
-          reject(err);
-        } else {
-          console.log('[DB] teachers 資料表已就緒');
-          resolve();
-        }
-      }
-    );
+    db.serialize(() => {
+      db.run(
+        `CREATE TABLE IF NOT EXISTS teachers (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          name        TEXT    NOT NULL,
+          title       TEXT,
+          category    TEXT,
+          specialties TEXT,
+          email       TEXT,
+          image_url   TEXT,
+          profile_url TEXT
+        )`,
+        (err) => {
+          if (err) {
+            reject(err);
+          }
+        },
+      );
+
+      db.run(
+        `CREATE TABLE IF NOT EXISTS reviews (
+          id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+          teacher_id            INTEGER NOT NULL,
+          department            TEXT,
+          kindness_rating       INTEGER NOT NULL CHECK(kindness_rating BETWEEN 1 AND 5),
+          recommendation_rating INTEGER NOT NULL CHECK(recommendation_rating BETWEEN 1 AND 5),
+          workload_rating       INTEGER NOT NULL CHECK(workload_rating BETWEEN 1 AND 5),
+          content               TEXT NOT NULL,
+          created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE
+        )`,
+        (err) => {
+          if (err) {
+            console.error('[DB] Failed to initialize tables:', err.message);
+            reject(err);
+          } else {
+            console.log('[DB] teachers and reviews tables are ready.');
+            resolve();
+          }
+        },
+      );
+    });
   });
 }
 
-/**
- * 清空 teachers 資料表（爬蟲重新執行前使用）
- */
 function clearTeachers() {
   return new Promise((resolve, reject) => {
     db.run('DELETE FROM teachers', (err) => {
       if (err) {
-        console.error('[DB] 清空資料失敗:', err.message);
         reject(err);
       } else {
-        console.log('[DB] teachers 資料表已清空');
         resolve();
       }
     });
   });
 }
 
-/**
- * 插入一筆教授資料
- * @param {Object} teacher - { name, title, category, specialties, email, image_url, profile_url }
- */
 function insertTeacher(teacher) {
   return new Promise((resolve, reject) => {
     const { name, title, category, specialties, email, image_url, profile_url } = teacher;
-    const specialtiesStr = Array.isArray(specialties)
-      ? JSON.stringify(specialties)
-      : specialties || '[]';
+    const specialtiesStr = Array.isArray(specialties) ? JSON.stringify(specialties) : specialties || '[]';
 
     db.run(
       `INSERT INTO teachers (name, title, category, specialties, email, image_url, profile_url)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [name, title, category, specialtiesStr, email, image_url, profile_url],
-      function (err) {
+      function onInsert(err) {
         if (err) {
-          console.error('[DB] 插入資料失敗:', err.message);
           reject(err);
         } else {
           resolve(this.lastID);
         }
-      }
+      },
     );
   });
 }
 
-/**
- * 查詢所有教授（支援 keyword 與 category 過濾）
- * @param {string} q        - 關鍵字（姓名、職稱、專長模糊搜尋）
- * @param {string} category - 分類精確過濾
- */
+function parseSpecialties(value) {
+  try {
+    return JSON.parse(value || '[]');
+  } catch {
+    return [];
+  }
+}
+
 function queryTeachers(q, category) {
   return new Promise((resolve, reject) => {
-    let sql = 'SELECT * FROM teachers WHERE 1=1';
+    let sql = `
+      SELECT
+        teachers.*,
+        COUNT(reviews.id) AS review_count,
+        AVG(reviews.kindness_rating) AS kindness_avg,
+        AVG(reviews.recommendation_rating) AS recommendation_avg,
+        AVG(reviews.workload_rating) AS workload_avg
+      FROM teachers
+      LEFT JOIN reviews ON reviews.teacher_id = teachers.id
+      WHERE 1 = 1
+    `;
     const params = [];
 
     if (q) {
-      sql += ` AND (name LIKE ? OR title LIKE ? OR specialties LIKE ?)`;
+      sql += ' AND (teachers.name LIKE ? OR teachers.title LIKE ? OR teachers.specialties LIKE ?)';
       const like = `%${q}%`;
       params.push(like, like, like);
     }
-    if (category && category !== '全部') {
-      sql += ` AND category = ?`;
+
+    if (category && category !== '全部教授') {
+      sql += ' AND teachers.category = ?';
       params.push(category);
     }
 
-    sql += ' ORDER BY id ASC';
+    sql += ' GROUP BY teachers.id ORDER BY teachers.id ASC';
 
     db.all(sql, params, (err, rows) => {
       if (err) {
-        console.error('[DB] 查詢失敗:', err.message);
         reject(err);
       } else {
-        // 將 specialties JSON 字串還原為陣列
-        const parsed = rows.map((row) => ({
-          ...row,
-          specialties: (() => {
-            try { return JSON.parse(row.specialties); }
-            catch { return []; }
-          })()
-        }));
-        resolve(parsed);
+        resolve(
+          rows.map((row) => ({
+            ...row,
+            specialties: parseSpecialties(row.specialties),
+            reviews: [],
+            review_summary: {
+              count: row.review_count || 0,
+              kindness: row.kindness_avg || 0,
+              recommendation: row.recommendation_avg || 0,
+              workload: row.workload_avg || 0,
+            },
+          })),
+        );
       }
     });
   });
 }
 
-module.exports = { db, initDB, clearTeachers, insertTeacher, queryTeachers };
+function queryReviews(teacherId) {
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT *
+       FROM reviews
+       WHERE teacher_id = ?
+       ORDER BY datetime(created_at) DESC, id DESC`,
+      [teacherId],
+      (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows);
+        }
+      },
+    );
+  });
+}
+
+function insertReview(teacherId, review) {
+  return new Promise((resolve, reject) => {
+    const { department, kindness_rating, recommendation_rating, workload_rating, content } = review;
+
+    db.run(
+      `INSERT INTO reviews (
+        teacher_id,
+        department,
+        kindness_rating,
+        recommendation_rating,
+        workload_rating,
+        content
+      )
+      VALUES (?, ?, ?, ?, ?, ?)`,
+      [teacherId, department, kindness_rating, recommendation_rating, workload_rating, content],
+      function onInsert(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(this.lastID);
+        }
+      },
+    );
+  });
+}
+
+module.exports = {
+  db,
+  initDB,
+  clearTeachers,
+  insertTeacher,
+  queryTeachers,
+  queryReviews,
+  insertReview,
+};
