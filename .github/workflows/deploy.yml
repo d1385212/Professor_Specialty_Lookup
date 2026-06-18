@@ -1,4 +1,4 @@
-name: Deploy Vite app to GitHub Pages
+name: Deploy – GitHub Pages (frontend) + Azure App Service (backend)
 
 on:
   push:
@@ -15,11 +15,34 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  # ── Job 1: 部署後端到 Azure App Service ────────────────────────
+  deploy-backend:
+    name: Deploy backend to Azure App Service
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: project/client
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install server dependencies
+        working-directory: project/server
+        run: npm ci --omit=dev
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: project/server
+
+  # ── Job 2: Build 前端並部署到 GitHub Pages ─────────────────────
+  build-frontend:
+    name: Build frontend
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,10 +54,15 @@ jobs:
           cache: npm
           cache-dependency-path: project/client/package-lock.json
 
-      - name: Install dependencies
+      - name: Install client dependencies
+        working-directory: project/client
         run: npm ci
 
-      - name: Build
+      - name: Build client
+        working-directory: project/client
+        env:
+          # 指向 Azure 後端的 URL（設定在 GitHub Secrets）
+          VITE_API_BASE: ${{ secrets.VITE_API_BASE }}
         run: npm run build
 
       - name: Upload Pages artifact
@@ -42,11 +70,12 @@ jobs:
         with:
           path: project/client/dist
 
-  deploy:
+  deploy-frontend:
+    name: Deploy frontend to GitHub Pages
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    needs: build
+    needs: build-frontend
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to GitHub Pages

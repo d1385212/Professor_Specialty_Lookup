@@ -5,14 +5,26 @@ const { initDB, insertReview, queryReviews, queryTeachers } = require('./db');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// 允許的前端來源（本地 + GitHub Pages + 自訂網域）
+const defaultOrigins = [
+  'http://localhost:5173',
+  'http://localhost:4173',
+  'http://127.0.0.1:5173',
+];
+const extraOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean)
+  : [];
+const allowedOrigins = [...defaultOrigins, ...extraOrigins];
+
 app.use(express.json());
 app.use(
   cors({
-    origin: ['http://localhost:5173', 'http://localhost:4173', 'http://127.0.0.1:5173'],
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type'],
   }),
 );
+
 
 function sendSuccess(res, data, meta = {}) {
   res.json({ success: true, ...meta, data });

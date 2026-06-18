@@ -3,7 +3,8 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import SearchBar from './components/SearchBar.vue'
 import TeacherCard from './components/TeacherCard.vue'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000'
+const API_BASE = import.meta.env.VITE_API_BASE || ''
+const STATIC_MODE = !import.meta.env.VITE_API_BASE
 const ALL_CATEGORY = '全部教授'
 
 const teachers = ref([])
@@ -219,17 +220,36 @@ async function loadTeachers() {
   errorMessage.value = ''
 
   try {
-    const [teacherResponse, categoryResponse] = await Promise.all([
-      fetch(`${API_BASE}/api/teachers`),
-      fetch(`${API_BASE}/api/categories`),
-    ])
+    let teacherPayload, categoryPayload
 
-    if (!teacherResponse.ok || !categoryResponse.ok) {
-      throw new Error('API 回應失敗')
+    if (STATIC_MODE) {
+      // GitHub Pages 靜態模式：直接讀取爬蟲產生的 JSON 檔
+      const base = import.meta.env.BASE_URL
+      const [teacherResponse, categoryResponse] = await Promise.all([
+        fetch(`${base}api/teachers.json`),
+        fetch(`${base}api/categories.json`),
+      ])
+
+      if (!teacherResponse.ok || !categoryResponse.ok) {
+        throw new Error('靜態 JSON 載入失敗')
+      }
+
+      teacherPayload = await teacherResponse.json()
+      categoryPayload = await categoryResponse.json()
+    } else {
+      // 本地開發模式：呼叫後端 API
+      const [teacherResponse, categoryResponse] = await Promise.all([
+        fetch(`${API_BASE}/api/teachers`),
+        fetch(`${API_BASE}/api/categories`),
+      ])
+
+      if (!teacherResponse.ok || !categoryResponse.ok) {
+        throw new Error('API 回應失敗')
+      }
+
+      teacherPayload = await teacherResponse.json()
+      categoryPayload = await categoryResponse.json()
     }
-
-    const teacherPayload = await teacherResponse.json()
-    const categoryPayload = await categoryResponse.json()
 
     teachers.value = (teacherPayload.data || []).map(normalizeTeacher)
     categories.value = [ALL_CATEGORY, ...(categoryPayload.data || [])]
@@ -240,6 +260,7 @@ async function loadTeachers() {
     loading.value = false
   }
 }
+
 
 async function openTeacher(teacher) {
   selectedTeacher.value = teacher
@@ -270,6 +291,11 @@ async function loadReviews(teacherId) {
 }
 
 async function submitReview() {
+  if (STATIC_MODE) {
+    reviewMessage.value = '目前為唯讀展示模式，評價功能需後端伺服器才能使用。'
+    return
+  }
+
   if (!selectedTeacher.value || !reviewForm.content.trim()) {
     reviewMessage.value = '請至少填寫一段評價內容。'
     return
@@ -308,6 +334,7 @@ async function submitReview() {
     reviewMessage.value = error.message || '評價送出失敗，請稍後再試。'
   }
 }
+
 
 function handleCategoryChange(category) {
   activeCategory.value = category
