@@ -33,10 +33,11 @@ jobs:
         working-directory: project/server
         run: node scraper.js
 
-      # 移除 devDependencies，只保留 production 依賴再打包
-      - name: Prune devDependencies before packaging
+      # 移除 node_modules，讓 Azure 在其 Linux 環境自行安裝
+      # （避免 sqlite3 等原生模組因平台不同而無法載入）
+      - name: Remove node_modules before packaging
         working-directory: project/server
-        run: npm prune --omit=dev
+        run: rm -rf node_modules
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
