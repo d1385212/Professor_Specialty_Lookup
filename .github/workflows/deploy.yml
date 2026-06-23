@@ -36,7 +36,6 @@ jobs:
       - name: Build client
         working-directory: project/client
         env:
-          # 指向 Azure 後端 API 的 URL（設定在 GitHub Secrets）
           VITE_API_BASE: ${{ secrets.VITE_API_BASE }}
         run: npm run build
 
