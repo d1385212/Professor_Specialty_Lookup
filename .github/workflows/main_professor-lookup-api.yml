@@ -23,9 +23,20 @@ jobs:
         with:
           node-version: '22.x'
 
-      - name: Install server dependencies
+      # 安裝全部依賴（含 devDependencies）讓爬蟲可以執行
+      - name: Install ALL server dependencies (including devDependencies)
         working-directory: project/server
-        run: npm ci --omit=dev
+        run: npm ci
+
+      # 執行爬蟲，產生 teachers.db（因為 .gitignore 排除了 .db 檔案）
+      - name: Run scraper to generate teachers.db
+        working-directory: project/server
+        run: node scraper.js
+
+      # 移除 devDependencies，只保留 production 依賴再打包
+      - name: Prune devDependencies before packaging
+        working-directory: project/server
+        run: npm prune --omit=dev
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
