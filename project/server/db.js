@@ -1,8 +1,24 @@
-const sqlite3 = require('sqlite3').verbose();
+﻿const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const fs = require('fs');
 
-const DB_PATH = path.join(__dirname, 'teachers.db');
+// 判斷是否在 Azure 環境 (Azure 自動提供此變數)
+const isAzure = !!process.env.WEBSITE_SITE_NAME;
 
+// 如果在 Azure，將資料庫放在可讀寫且不會被部署覆蓋的 /home/data 目錄
+const DB_DIR = isAzure ? '/home/data' : __dirname;
+const DB_PATH = path.join(DB_DIR, 'teachers.db');
+
+// 【關鍵魔法】如果是 Azure 環境，且 /home/data 裡還沒有資料庫
+// 就把 GitHub Actions 剛爬好、一起部署上來的初始資料庫「複製」過去當作基底
+if (isAzure && !fs.existsSync(DB_PATH)) {
+  const deployedDbPath = path.join(__dirname, 'teachers.db');
+  if (fs.existsSync(deployedDbPath)) {
+    if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
+    fs.copyFileSync(deployedDbPath, DB_PATH);
+    console.log('[DB] 成功將初始資料庫複製到安全且可寫入的目錄！');
+  }
+}
 const db = new sqlite3.Database(DB_PATH, (err) => {
   if (err) {
     console.error('[DB] Failed to open SQLite database:', err.message);

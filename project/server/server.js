@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const cors = require('cors');
 const { initDB, insertReview, queryReviews, queryTeachers } = require('./db');
 
@@ -150,6 +150,6 @@ app.use((req, res) => {
     });
   } catch (err) {
     console.error('[Server] Failed to start:', err);
-    process.exit(1);
+    //process.exit(1);
   }
 })();
