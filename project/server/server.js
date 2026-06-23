@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const cors = require('cors');
 const { initDB, insertReview, queryReviews, queryTeachers } = require('./db');
 
@@ -10,6 +10,7 @@ const defaultOrigins = [
   'http://localhost:5173',
   'http://localhost:4173',
   'http://127.0.0.1:5173',
+  'https://d1385212.github.io'
 ];
 const extraOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean)
